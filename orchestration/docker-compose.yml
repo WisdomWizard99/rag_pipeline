@@ -1,0 +1,66 @@
+version: '3.8'
+
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.9.1
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    GROQ_API_KEY: ${GROQ_API_KEY}
+    QDRANT_HOST: host.docker.internal
+    QDRANT_PORT: 6333
+    _PIP_ADDITIONAL_REQUIREMENTS: "arxiv pymupdf langchain-text-splitters sentence-transformers qdrant-client groq"
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+  depends_on:
+    postgres: 
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+
+  # airflow-init:
+  #   <<: *airflow-common
+  #   entrypoint: /bin/bash
+  #   command: >
+  #     -c "airflow db init &&
+  #         airflow users create
+  #         --username admin
+  #         --firstname admin
+  #         --lastname admin
+  #         --role Admin
+  #         --email admin@example.com
+  #         --password admin"
+
+  airflow-init:
+      <<: *airflow-common
+      entrypoint: /bin/bash
+      command: -c "airflow db migrate && airflow users create --username admin --firstname admin --lastname admin --role Admin --email admin@admin.com --password admin"
+
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 10s
+      retries: 5
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
