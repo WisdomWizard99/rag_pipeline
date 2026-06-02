@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: query_performance
+    description: "Daily query performance metrics — latency, retrieval scores, unanswered rate"
+    columns:
+      - name: query_date
+        description: "Date of queries"
+        tests:
+          - not_null
+      - name: total_queries
+        description: "Total queries on that day"
+        tests:
+          - not_null
+      - name: unanswered_pct
+        description: "Percentage of queries that went unanswered"
+        tests:
+          - not_null
+
+  - name: retrieval_quality
+    description: "Query breakdown by retrieval quality bucket"
+    columns:
+      - name: retrieval_quality
+        description: "Quality bucket — high/medium/low"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['high', 'medium', 'low']
+      - name: query_count
+        description: "Number of queries in this bucket"
+        tests:
+          - not_null

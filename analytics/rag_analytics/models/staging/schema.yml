@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: stg_query_logs
+    description: "Cleaned and standardized RAG query logs with derived quality buckets"
+    columns:
+      - name: query_id
+        description: "Unique query identifier"
+        tests:
+          - unique
+          - not_null
+      - name: question
+        description: "The question asked by the user"
+        tests:
+          - not_null
+      - name: latency_ms
+        description: "Query latency in milliseconds"
+        tests:
+          - not_null
+      - name: retrieval_quality
+        description: "high/medium/low based on avg_score thresholds"
+        tests:
+          - accepted_values:
+              values: ['high', 'medium', 'low']
+      - name: latency_bucket
+        description: "fast/normal/slow based on latency_ms thresholds"
+        tests:
+          - accepted_values:
+              values: ['fast', 'normal', 'slow']

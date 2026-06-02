@@ -8,7 +8,8 @@ import duckdb
 import os
 from datetime import datetime
 
-DB_PATH = os.getenv("DUCKDB_PATH", "analytics/rag_logs.duckdb")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.getenv("DUCKDB_PATH", os.path.join(BASE_DIR, "analytics", "rag_logs.duckdb"))
 
 def init_db():
     """Create logs table if it doesn't exist."""

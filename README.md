@@ -172,7 +172,7 @@ Testing showed that with 10 papers, definitional chunks were often ranked 6th-8t
 ```
 
 ## Lineage Graph
-![alt text](image-1.png)
+![alt text](lineage_graph.png)
 
 ## Roadmap
 
