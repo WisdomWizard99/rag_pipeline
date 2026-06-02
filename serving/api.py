@@ -11,6 +11,10 @@ import os
 import time
 
 from retriever import retrieve
+from logger_db import init_db, log_query
+
+# Initialize DB on startup
+init_db()
 
 load_dotenv()
 
@@ -97,6 +101,15 @@ def query(request: QueryRequest):
 
     answer = response.choices[0].message.content
     latency = round((time.time() - start) * 1000, 2)
+    
+    # Log the query
+    log_query(
+    question=request.question,
+    answer=answer,
+    latency_ms=latency,
+    top_k=request.top_k,
+    sources=chunks,
+)
 
     return QueryResponse(
         question=request.question,

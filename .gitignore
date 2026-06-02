@@ -29,3 +29,6 @@ orchestration/logs/
 # OS
 .DS_Store
 Thumbs.db
+
+error.log
+*.log
