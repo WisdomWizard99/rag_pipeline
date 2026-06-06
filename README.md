@@ -13,6 +13,8 @@ Great Expectations (Data Quality)
 FastAPI (RAG Endpoint) → Groq LLM
 ↓
 DuckDB + dbt (Analytics Layer)
+↓
+Prometheus + Grafana (Monitoring)
 
 ## Tech Stack
 
@@ -26,26 +28,33 @@ DuckDB + dbt (Analytics Layer)
 | Analytics | dbt + DuckDB | Query performance metrics |
 | Data Quality | Custom validation | Chunk quality gates |
 | Containerization | Docker + Compose | Local infrastructure |
+| Monitoring | Prometheus + Grafana | Real-time metrics dashboard |
 
 ## Project Structure
 
 rag-pipeline-de/
 ├── serving/
-│   ├── api.py              # FastAPI RAG endpoint
-│   ├── retriever.py        # Qdrant vector search
-│   └── logger_db.py        # Query logging to DuckDB
+│   ├── api.py                  # FastAPI RAG endpoint
+│   ├── retriever.py            # Qdrant vector search
+│   ├── logger_db.py            # Query logging to DuckDB
+│   └── metrics.py              # Prometheus metrics
 ├── orchestration/
 │   ├── dags/
 │   │   └── arxiv_ingestion_dag.py   # Airflow DAG
 │   └── docker-compose.yml           # Airflow + Postgres
-└── analytics/
-└── rag_analytics/
-└── models/
-├── staging/
-│   └── stg_query_logs.sql
-└── marts/
-├── query_performance.sql
-└── retrieval_quality.sql
+├── analytics/
+│   └── rag_analytics/
+│       └── models/
+│           ├── staging/
+│           │   ├── stg_query_logs.sql
+│           │   └── schema.yml
+│           └── marts/
+│               ├── query_performance.sql
+│               ├── retrieval_quality.sql
+│               └── schema.yml
+└── monitoring/
+├── docker-compose.yml      # Prometheus + Grafana
+└── prometheus.yml          # Scrape config
 
 
 ## Quick Start
@@ -58,7 +67,7 @@ rag-pipeline-de/
 ### 1. Clone and setup
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/rag-pipeline-de.git
+git clone https://github.com/WisdomWizard99/rag_pipeline.git
 cd rag-pipeline-de
 python -m venv venv
 venv\Scripts\activate
@@ -69,7 +78,7 @@ pip install -r requirements.txt
 
 Create `.env` in project root:
 
-GROQ_API_KEY=your_key_here
+GROQ_API_KEY=**************
 QDRANT_HOST=localhost
 QDRANT_PORT=6333
 
@@ -83,12 +92,16 @@ docker run -d --name qdrant -p 6333:6333 -v qdrant_storage:/qdrant/storage qdran
 cd orchestration
 docker-compose up -d
 ```
+# Start Prometheus + Grafana (monitoring)
+cd ../monitoring
+docker-compose up -d
+```
 
 ### 4. Start the API
 
 ```bash
 cd serving
-uvicorn api:app --reload --port 8000
+uvicorn api:app --reload --port 8000 --host 0.0.0.0
 ```
 
 ### 5. Query the RAG system
@@ -116,26 +129,43 @@ dbt test
 dbt docs serve
 ```
 
-## Key Design Decisions
+## Service URLs
 
-**Why Qdrant over Pinecone?**
-Qdrant is open-source and runs locally via Docker — no cloud account needed for development. The same code deploys to Qdrant Cloud in production by changing one environment variable.
+| Service | URL | Credentials | Description |
+|---|---|---|---|
+| **FastAPI** | `http://localhost:8000/docs` | None | Interactive RAG API — test queries here |
+| **FastAPI Health** | `http://localhost:8000/health` | None | API health check endpoint |
+| **FastAPI Metrics** | `http://localhost:8000/metrics` | None | Raw Prometheus metrics endpoint |
+| **Qdrant Dashboard** | `http://localhost:6333/dashboard` | None | Vector DB — view collections and vectors |
+| **Airflow** | `http://localhost:8080` | admin / admin | Pipeline orchestration — trigger and monitor DAGs |
+| **Prometheus** | `http://localhost:9090` | None | Metrics database — query raw time-series data |
+| **Prometheus Targets** | `http://localhost:9090/targets` | None | Verify Prometheus is scraping the API |
+| **Grafana** | `http://localhost:3000` | admin / admin | Live monitoring dashboard |
+| **dbt Docs** | `http://localhost:8080` (dbt serve) | None | Data lineage graph and model documentation |
 
-**Why DuckDB over Postgres for analytics?**
-DuckDB is embedded — no server needed. It's column-oriented so analytical queries are fast. In production this swaps to Snowflake or BigQuery by changing one line in dbt profiles.yml.
+## Monitoring Dashboard
 
-**Why chunk size 500 with 50 overlap?**
-500 characters is large enough to hold a complete idea but small enough to embed one specific concept. 50-character overlap prevents ideas from being cut at chunk boundaries.
+The Grafana dashboard at `http://localhost:3000` tracks 4 key metrics in real time:
 
-**Why top_k=8 not 5?**
-Testing showed that with 10 papers, definitional chunks were often ranked 6th-8th. top_k=5 missed them. top_k=8 captures them without adding too much noise.
+| Panel | Query | What it shows |
+|---|---|---|
+| **Total Successful Queries** | `rag_queries_total{status="success"}` | Total successful RAG queries since API start |
+| **Avg Query Latency (ms)** | `rate(rag_query_latency_ms_sum[5m]) / rate(rag_query_latency_ms_count[5m])` | Average end-to-end response time per query |
+| **Unanswered Queries** | `rag_unanswered_total` | Queries where LLM couldn't find answer in context |
+| **Retrieval Score Distribution** | `rate(rag_retrieval_score_bucket[5m])` | Qdrant similarity scores showing retrieval quality |
 
-## What I learned building this
+## Prometheus Metrics
 
-- High retrieval scores don't guarantee good answers — chunk content quality matters as much as similarity scores
-- The LLM sometimes cites papers outside the retrieved context (context leakage) — a known RAG failure mode
-- DuckDB path resolution differs between notebook and FastAPI contexts — always use absolute paths in production
-- Airflow's TaskFlow API makes dependencies implicit through return values — cleaner than explicit >> operators
+Three metric types instrument the API:
+
+| Metric | Type | Description |
+|---|---|---|
+| `rag_queries_total` | Counter | Total queries labeled by status (success/error) |
+| `rag_unanswered_total` | Counter | Queries returning "I don't know" |
+| `rag_query_latency_ms` | Histogram | Latency distribution across 9 buckets (100ms–5000ms) |
+| `rag_retrieval_score` | Histogram | Qdrant score distribution across 10 buckets (0.1–1.0) |
+| `rag_current_top_k` | Gauge | Current top_k retrieval setting |
+
 
 ## API Endpoints
 
@@ -174,11 +204,5 @@ Testing showed that with 10 papers, definitional chunks were often ranked 6th-8t
 ## Lineage Graph
 ![alt text](lineage_graph.png)
 
-## Roadmap
 
-- [ ] Prometheus + Grafana monitoring dashboard
-- [ ] OpenLineage data lineage tracking  
-- [ ] Streamlit chat UI
-- [ ] Kafka streaming ingestion
-- [ ] Reranker model for better retrieval
-
+![alt text](Grafana_Monitoring.png)
