@@ -32,3 +32,8 @@ Thumbs.db
 
 error.log
 *.log
+
+
+*.ipynb
+.ipynb_checkpoints/
+learning/

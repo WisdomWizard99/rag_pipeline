@@ -6,15 +6,17 @@ with full orchestration, data quality, and observability.
 
 ## Architecture
 
-ArXiv API → Airflow DAG → PDF Extraction → Chunking → Qdrant (Vector DB)
-↓
-Great Expectations (Data Quality)
-↓
-FastAPI (RAG Endpoint) → Groq LLM
-↓
-DuckDB + dbt (Analytics Layer)
-↓
-Prometheus + Grafana (Monitoring)
+```
+ArXiv API → Airflow DAG → PDF Extraction → Chunking → Qdrant
+                ↓
+         Data Quality Gate
+                ↓
+         FastAPI → Groq LLM
+                ↓
+         DuckDB + dbt
+                ↓
+         Prometheus + Grafana
+```
 
 ## Tech Stack
 
